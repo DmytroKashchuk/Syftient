@@ -69,6 +69,13 @@ syft <image> -o spdx-json=./spdx.json -o cyclonedx-json=./cdx.json
 > **Want to know all of the ins-and-outs of Syft?** Check out the [CLI docs](https://oss.anchore.com/docs/reference/syft/cli/),  [configuration docs](https://oss.anchore.com/docs/reference/syft/configuration/), and [JSON schema](https://oss.anchore.com/docs/reference/syft/json/latest/).
 
 
+## 🤖 AI Enrichment (Experimental, opt-in)
+
+Syftient adds an optional **local-first LLM enrichment layer** powered by [Ollama](https://ollama.com) that improves SBOM quality for fields that deterministic catalogers cannot resolve (e.g. packages with `NOASSERTION` licenses). The feature is **disabled by default** — pass `--llm-enabled` to activate it. No data ever leaves your machine.
+
+➡️ See [docs/llm-enrichment.md](docs/llm-enrichment.md) for the full documentation, quickstart, and configuration reference.
+
+
 ## Contributing
 
 We encourage users to help make these tools better by [submitting issues](https://github.com/anchore/syft/issues) when you find a bug or want a new feature. 
