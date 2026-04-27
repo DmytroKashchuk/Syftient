@@ -92,7 +92,8 @@ func (lc *LicenseClassifier) Name() string {
 }
 
 // Applies returns true when the package has no known SPDX license — i.e. all
-// license values are NOASSERTION / NONE / empty, or the package has no licenses.
+// license SPDXExpressions are NOASSERTION / NONE / empty, or the package has
+// no licenses at all.
 func (lc *LicenseClassifier) Applies(p pkg.Package) bool {
 	licenses := p.Licenses.ToSlice()
 	if len(licenses) == 0 {
@@ -100,9 +101,9 @@ func (lc *LicenseClassifier) Applies(p pkg.Package) bool {
 	}
 	for _, l := range licenses {
 		expr := strings.TrimSpace(l.SPDXExpression)
-		val := strings.TrimSpace(l.Value)
-		if !knownNoAssertionValues[expr] || !knownNoAssertionValues[val] {
-			// At least one license is known — skip this package.
+		if !knownNoAssertionValues[expr] {
+			// At least one license already has a recognised SPDX expression —
+			// no need to enrich this package.
 			return false
 		}
 	}

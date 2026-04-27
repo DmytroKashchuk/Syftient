@@ -31,7 +31,7 @@ import (
 )
 
 // EnrichmentTask is the extension-point interface for LLM enrichment tasks.
-// Each task focuses on a specific aspect of a package (e.g. licence
+// Each task focuses on a specific aspect of a package (e.g. license
 // classification) and is applied independently by the Orchestrator.
 type EnrichmentTask interface {
 	// Name returns the stable task identifier (e.g. "licenses").
@@ -96,6 +96,9 @@ func (o *Orchestrator) Enrich(ctx context.Context, s *sbom.SBOM) {
 		return
 	}
 
+	// totalTokens tracks approximate token usage across the scan.
+	// TODO: extend EnrichmentTask.Enrich to return token counts so this can
+	// be accurately incremented per response (follow-up PR).
 	var totalTokens int
 
 	for p := range s.Artifacts.Packages.Enumerate() {
@@ -120,9 +123,9 @@ func (o *Orchestrator) Enrich(ctx context.Context, s *sbom.SBOM) {
 				continue
 			}
 
-			// Count tokens from the last LLM response (best-effort).
-			// The actual token count is tracked inside the task via the evidence.
-			_ = totalTokens
+			// Approximate token cost: count one "unit" per enriched package until
+			// the full token-count plumbing is in place (see TODO above).
+			totalTokens++
 
 			// Replace the package in the collection: delete the old entry and
 			// add the enriched copy.  The enriched copy has a new ID because
