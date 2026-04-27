@@ -22,9 +22,11 @@ import (
 	"github.com/anchore/syft/internal"
 	"github.com/anchore/syft/internal/bus"
 	"github.com/anchore/syft/internal/file"
+	internallm "github.com/anchore/syft/internal/llm"
 	"github.com/anchore/syft/internal/log"
 	"github.com/anchore/syft/internal/task"
 	"github.com/anchore/syft/syft"
+	"github.com/anchore/syft/syft/pkg/cataloger/llmenrich"
 	"github.com/anchore/syft/syft/sbom"
 	"github.com/anchore/syft/syft/source"
 	"github.com/anchore/syft/syft/source/sourceproviders"
@@ -72,6 +74,7 @@ type scanOptions struct {
 	options.UpdateCheck `yaml:",inline" mapstructure:",squash"`
 	options.Catalog     `yaml:",inline" mapstructure:",squash"`
 	Cache               options.Cache `json:"-" yaml:"cache" mapstructure:"cache"`
+	LLM                 options.LLM   `yaml:"llm" json:"llm" mapstructure:"llm"`
 }
 
 func defaultScanOptions() *scanOptions {
@@ -80,6 +83,7 @@ func defaultScanOptions() *scanOptions {
 		UpdateCheck: options.DefaultUpdateCheck(),
 		Catalog:     options.DefaultCatalog(),
 		Cache:       options.DefaultCache(),
+		LLM:         options.DefaultLLM(),
 	}
 }
 
@@ -207,6 +211,10 @@ func runScan(ctx context.Context, id clio.Identification, opts *scanOptions, use
 	if s == nil {
 		return fmt.Errorf("no SBOM produced for %q", userInput)
 	}
+
+	// LLM enrichment hook — opt-in only, disabled by default.
+	// This is a single additive call that is easy to remove or replace.
+	applyLLMEnrichment(ctx, s, &opts.LLM)
 
 	if err := writer.Write(*s); err != nil {
 		return fmt.Errorf("failed to write SBOM: %w", err)
@@ -449,4 +457,45 @@ func trimOperation(x string) string {
 
 func allSourceProviderTags() []string {
 	return collections.TaggedValueSet[source.Provider]{}.Join(sourceproviders.All("", nil)...).Tags()
+}
+
+// applyLLMEnrichment runs the opt-in LLM enrichment pipeline against the SBOM.
+// It is a no-op when cfg.Enabled is false, ensuring the default Syft behaviour
+// is completely unchanged.
+//
+// Graceful degradation: if the LLM provider is unreachable a single warning is
+// logged and the function returns without modifying the SBOM.
+func applyLLMEnrichment(ctx context.Context, s *sbom.SBOM, cfg *options.LLM) {
+	if cfg == nil || !cfg.Enabled {
+		return
+	}
+
+	llmClient := internallm.NewOllamaClient(internallm.OllamaConfig{
+		Endpoint: cfg.Endpoint,
+		Model:    cfg.Model,
+		Timeout:  cfg.Timeout,
+	})
+
+	cachedClient := internallm.NewCachedClient(llmClient)
+
+	if err := cachedClient.HealthCheck(ctx); err != nil {
+		log.WithFields("error", err).
+			Warn("llm: provider unreachable — skipping LLM enrichment (graceful degradation)")
+		return
+	}
+
+	orch := llmenrich.NewOrchestrator(
+		cachedClient,
+		llmenrich.DefaultTasks(),
+		llmenrich.OrchestratorConfig{
+			Tasks:         cfg.Tasks,
+			MinConfidence: cfg.MinConfidence,
+			TokenBudget:   cfg.MaxTokens,
+		},
+	)
+
+	log.WithFields("model", cfg.Model, "provider", cfg.Provider).
+		Info("llm: running SBOM enrichment (experimental, opt-in)")
+
+	orch.Enrich(ctx, s)
 }
