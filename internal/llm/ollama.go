@@ -13,8 +13,15 @@ import (
 const (
 	defaultOllamaEndpoint = "http://localhost:11434"
 	defaultModel          = "llama3.2:3b"
-	defaultTimeout        = 30 * time.Second
-	maxRetries            = 1
+	// defaultTimeout is the per-request timeout applied when the caller does not
+	// specify one.  30 s is generous enough for a cold-start response from a
+	// small local model while still providing a reasonable upper bound.
+	defaultTimeout = 30 * time.Second
+	// maxRetries is the maximum number of additional attempts on transient
+	// network failures.  A single retry is intentionally conservative — if the
+	// Ollama daemon is unreachable, the caller should fall back gracefully rather
+	// than spinning.
+	maxRetries = 1
 )
 
 // httpDoer is a small interface around *http.Client so the HTTP layer can be

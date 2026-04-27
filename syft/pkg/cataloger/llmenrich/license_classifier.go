@@ -142,7 +142,11 @@ func (lc *LicenseClassifier) Enrich(ctx context.Context, p pkg.Package, client l
 		return nil, nil
 	}
 
-	enriched := p // shallow copy
+	// Create a value copy of the package.  We replace only Licenses and
+	// Metadata (via AttachEvidence), and never mutate any shared reference
+	// fields (Locations, etc.), so a shallow copy followed by full field
+	// replacement is safe here.
+	enriched := p
 	enriched.Licenses = pkg.NewLicenseSet(pkg.License{
 		SPDXExpression: classified.License,
 		Value:          classified.License,

@@ -62,6 +62,7 @@ func newTestSBOM(packages ...pkg.Package) *sbom.SBOM {
 
 func TestOrchestrator_EnrichesPackages(t *testing.T) {
 	original := makePackage("mylib", "1.0")
+	originalID := original.ID()
 	mc := llm.NewMockClient(llm.ModelInfo{Provider: "mock", Name: "test-model"})
 
 	enriched := original
@@ -74,14 +75,22 @@ func TestOrchestrator_EnrichesPackages(t *testing.T) {
 	s := newTestSBOM(original)
 	orch.Enrich(context.Background(), s)
 
-	// The enriched package should be in the collection.
+	// The original package (by its old ID) should no longer be in the collection.
+	assert.Nil(t, s.Artifacts.Packages.Package(originalID),
+		"original package should have been replaced")
+
+	// The enriched package should be in the collection with its new ID.
 	found := false
+	var newID string
 	for p := range s.Artifacts.Packages.Enumerate() {
 		if p.Version == "1.0-enriched" {
 			found = true
+			newID = string(p.ID())
 		}
 	}
 	assert.True(t, found, "expected enriched package to be present in SBOM")
+	assert.NotEmpty(t, newID, "enriched package should have a non-empty ID")
+	assert.NotEqual(t, string(originalID), newID, "enriched package should have a different ID than the original")
 }
 
 func TestOrchestrator_SkipsNonApplicablePackages(t *testing.T) {
